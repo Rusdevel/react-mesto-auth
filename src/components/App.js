@@ -1,4 +1,5 @@
 import React from "react";
+import { Route, Switch, Redirect, useHistory} from 'react-router-dom';
 import Header from "./Header";
 import Main from "./Main";
 import Footer from "./Footer";
@@ -8,6 +9,11 @@ import EditAvatarPopup from "./EditAvatarPopup";
 import ImagePopup from "./ImagePopup";
 import api from "../utils/Api";
 import { CurrentUserContext } from "../contexts/CurrentUserContext";
+import Login from "./Login";
+import Register from "./Register";
+import InfoTooltip from "./InfoTooltip";
+import ProtectedRoute from "./ProtectedRoute";
+import * as auth from "../utils/auth";
 
 function App() {
   const [currentUser, setCurrentUser] = React.useState({});
@@ -16,6 +22,14 @@ function App() {
   const [isEditAvatarPopupOpen, setIsEditAvatarPopupOpen] = React.useState(false);
   const [selectedCard, setSelectedCard] = React.useState(null);
   const [cards, setCards] = React.useState([]);
+
+
+  //Авторизация
+  const [loggedIn, setLoggedIn] = React.useState(false);
+  const [isInfoTooltipPopupOpen, setIsInfoTooltipPopupOpen] = React.useState(false);
+  const [isSuccess, setIsSuccess] = React.useState(false);
+  const [userEmail, setUserEmail] = React.useState('')
+  const history = useHistory();
 
   React.useEffect(() => {
     api
@@ -50,11 +64,16 @@ function App() {
     setIsAddPlacePopupOpen(true);
   }
 
+  function handleInfoTooltipPopupOpen() {
+    setIsInfoTooltipPopupOpen(!isInfoTooltipPopupOpen)
+}
+
   function closeAllPopups() {
     setIsEditProfilePopupOpen(false);
     setIsAddPlacePopupOpen(false);
     setIsEditAvatarPopupOpen(false);
     setSelectedCard(null);
+    setIsInfoTooltipPopupOpen(false)
   }
   //обновляем профиль
   function handleUpdateUser(data) {
@@ -122,11 +141,100 @@ function App() {
       });
   }
 
+  function register(email, password) {
+    auth.register(email, password).then(
+        () => {
+            setIsSuccess(true)
+            handleInfoTooltipPopupOpen()
+            history.push('/');
+        })
+        .catch((err) => {
+            console.log(err)
+            setIsSuccess(false)
+            handleInfoTooltipPopupOpen()
+        })
+}
+  
+  function login(email, password) {
+
+    auth.authorization(email, password).then(
+        (data) => {
+            localStorage.setItem('token', data.token);
+            setUserEmail(email)
+            setLoggedIn(true)
+            history.push("/my-profile");
+        })
+        .catch((err) => {
+            console.log(err)
+            setIsSuccess(false)
+            handleInfoTooltipPopupOpen()
+        })
+}
+
+function signOut() {
+  localStorage.removeItem("token");
+  setLoggedIn(false);
+  history.push('sign-in');
+}
+
+
+const checkToken = React.useCallback(() => {
+  const token = localStorage.getItem('token');
+  auth.checkToken(token).then(
+      (data) => {
+          setLoggedIn(true);
+          setUserEmail(data.data.email);
+          history.push('/my-profile');
+      })
+      .catch((err) => {
+              console.log(err);
+          }
+      );
+}, []);
+
+React.useEffect(() => {
+  const token = localStorage.getItem('token');
+  if (token) {
+      checkToken();
+  }
+}, []);
+
   return (
     <CurrentUserContext.Provider value={currentUser}>
-      <div className="page">
-        <Header />
-        <Main
+            <div className="page">
+                <Header loggedIn={loggedIn} userEmail={userEmail} onSignOut={signOut}/>
+                <Switch>
+                   {/*<Route exact path='/'></Route>*/}
+                    <ProtectedRoute exact path='/'
+                                    component={Main}
+                                    loggedIn={loggedIn}
+                                    onEditProfile={handleEditProfileClick}
+                                    onAddPlace={handleAddPlaceClick}
+                                    onEditAvatar={handleEditAvatarClick}
+                                    onCardClick={handleCardClick}
+                                    cards={cards}
+                                    onCardLike={handleCardLike}
+                                    onCardDelete={handleCardDelete}
+                    />
+                    <Route path='/sign-up'>
+                        <Register onRegister={register}/>
+                    </Route>
+                    <Route path='/sign-in'>
+                        <Login onLogin={login} onChekToken={checkToken}/>
+                    </Route>
+                    <Route>
+                        {loggedIn ? <Redirect to='/'/> : <Redirect to='/sign-in'/>}
+                    </Route>
+                </Switch>
+                <Footer/>
+                <EditProfilePopup isOpen={isEditProfilePopupOpen} onClose={closeAllPopups} onUpdateUser={handleUpdateUser} />
+        <AddPlacePopup isOpen={isAddPlacePopupOpen} onClose={closeAllPopups} onAddPlace={handleAddPlaceSubmit} />
+        <EditAvatarPopup isOpen={isEditAvatarPopupOpen} onClose={closeAllPopups} onUpdateAvatar={handleUpdateAvatar} />
+        <ImagePopup card={selectedCard !== null && selectedCard} onClose={closeAllPopups} />
+        <InfoTooltip isOpen={isInfoTooltipPopupOpen}
+                             onClose={closeAllPopups} isSuccess={isSuccess}/>
+
+      {/*  <Main
           onEditProfile={handleEditProfileClick}
           onAddPlace={handleAddPlaceClick}
           onEditAvatar={handleEditAvatarClick}
@@ -134,12 +242,10 @@ function App() {
           cards={cards}
           onCardLike={handleCardLike}
           onCardDelete={handleCardDelete}
-        />
-        <Footer />
-        <EditProfilePopup isOpen={isEditProfilePopupOpen} onClose={closeAllPopups} onUpdateUser={handleUpdateUser} />
-        <AddPlacePopup isOpen={isAddPlacePopupOpen} onClose={closeAllPopups} onAddPlace={handleAddPlaceSubmit} />
-        <EditAvatarPopup isOpen={isEditAvatarPopupOpen} onClose={closeAllPopups} onUpdateAvatar={handleUpdateAvatar} />
-        <ImagePopup card={selectedCard !== null && selectedCard} onClose={closeAllPopups} />
+      />*/}
+        
+         
+        
       </div>
     </CurrentUserContext.Provider>
   );
